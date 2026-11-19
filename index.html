@@ -84,6 +84,17 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opac
 @media(max-width:720px){.panel:hover{transform:none}.cpu-core:after{inset:-12px}}
 @media(prefers-reduced-motion:reduce){body:before,.brandmark,.brandmark:after,.hero h1 span,.btn-primary,.cpu-stage:after,.cpu-icon,.cpu-process,.queue-chip,.queue-chip:after,.queue-chip:first-child,.g-block.current,.explain-box:after,.progress:after,.status.running .status-dot{animation:none!important}}
 
+
+/* FINAL GANTT CHART */
+.final-gantt-scroll{overflow-x:auto;padding:8px 2px 12px}
+.final-gantt{display:flex;align-items:stretch;gap:5px;width:max-content;min-width:100%;padding:5px 2px}
+.final-gantt-block{height:78px;min-width:78px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#10151b;font:12px 'DM Mono',monospace;font-weight:700;box-shadow:0 8px 20px #0004;position:relative;animation:blockIn .35s ease-out}
+.final-gantt-block.idle{background:#526074!important;color:#eef4fb}
+.final-gantt-block small{font-size:10px;font-weight:500;margin-top:5px;opacity:.82}
+.final-gantt-block em{font-size:9px;font-style:normal;margin-top:3px;opacity:.72}
+.final-gantt-ruler{display:flex;gap:5px;width:max-content;min-width:100%;font:10px 'DM Mono',monospace;color:#91a1b6;padding:0 2px}
+.final-gantt-ruler span{min-width:78px}
+.final-gantt-note{color:var(--muted);font-size:10px;margin-top:8px}
 </style>
 </head>
 <body><div class="shell">
@@ -120,6 +131,12 @@ body:after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opac
 <section class="panel"><div class="panel-head"><div class="panel-title"><span class="stepno">05</span>What's happening?</div><span class="subtle">LIVE EXPLANATION</span></div><div class="explain-box"><div class="explain-kicker" id="explainKicker">SCHEDULER INSIGHT</div><div class="explain-text" id="explanation">Start the simulation to see a step-by-step explanation of arrivals, CPU allocation, preemption and completion.</div></div><div style="margin-top:15px"><div class="panel-head" style="margin-bottom:10px"><div class="panel-title" style="font-size:11px">Remaining burst time</div></div><div class="process-state-list" id="remainingList"></div></div></section>
 </div>
 <section class="panel" style="margin-top:15px"><div class="panel-head"><div class="panel-title"><span class="stepno">06</span>Process performance</div><span class="subtle">FINAL METRICS UPDATE AS PROCESSES FINISH</span></div><div class="table-wrap"><table><thead><tr><th>Process</th><th>Arrival (AT)</th><th>Burst (BT)</th><th>Completion (CT)</th><th>Turnaround (TAT)</th><th>Waiting (WT)</th></tr></thead><tbody id="results"><tr><td colspan="6" class="pending" style="text-align:center">Results will appear as processes complete.</td></tr></tbody><tfoot id="averages"></tfoot></table></div><div class="formula"><span>TAT = CT − AT</span><span>WT = TAT − BT</span><span>CT = finishing time</span></div></section>
+
+<section class="panel" id="finalGanttPanel" style="margin-top:15px">
+<div class="panel-head"><div><div class="panel-title"><span class="stepno">07</span>Final Gantt chart</div><div class="subtle" style="margin-top:4px">Complete CPU execution order after the simulation ends</div></div><span class="subtle" id="finalGanttTotal">WAITING FOR SIMULATION</span></div>
+<div class="final-gantt-scroll"><div class="final-gantt" id="finalGantt"><span class="empty-queue">Run the simulation to generate the complete Gantt chart.</span></div><div class="final-gantt-ruler" id="finalGanttRuler"></div></div>
+<div class="legend" id="finalGanttLegend"></div><div class="final-gantt-note">Each block shows the process executed, its start and end time, and the duration of that CPU time slice. Grey blocks represent CPU idle time.</div>
+</section>
 </main></div>
 <footer class="footer">ROUND ROBIN CPU SCHEDULING <b>·</b> INTERACTIVE LEARNING SIMULATOR <b>·</b> NO SERVER OR INSTALLATION REQUIRED</footer>
 </div>
@@ -174,7 +191,7 @@ processes.forEach((p,i)=>remaining[i]=p.bt);
 $('clock').innerHTML='0<span class="unit"> t</span>';$('doneCount').textContent='0 / '+processes.length;$('switchCount').textContent='0';$('quantumMetric').innerHTML=($('quantum').value||2)+'<span class="unit"> units</span>';
 $('cpuCore').classList.remove('active');$('cpuLabel').textContent='CPU IDLE';$('cpuProcess').textContent='';$('cpuNote').textContent='Press Start simulation to begin the scheduling cycle.';
 $('execTitle').textContent='Waiting for simulation';$('execDesc').textContent='Your process execution will appear here.';$('sliceLabel').textContent='SLICE 0 / 0';$('progress').style.width='0%';
-$('queue').innerHTML='<span class="empty-queue">Queue is empty — waiting for the first process.</span>';$('gantt').innerHTML='';$('ruler').innerHTML='';$('timelineInfo').textContent='0 time units';
+$('queue').innerHTML='<span class="empty-queue">Queue is empty — waiting for the first process.</span>';$('gantt').innerHTML='';$('ruler').innerHTML='';$('timelineInfo').textContent='0 time units';$('finalGantt').innerHTML='<span class="empty-queue">Run the simulation to generate the complete Gantt chart.</span>';$('finalGanttRuler').innerHTML='';$('finalGanttTotal').textContent='WAITING FOR SIMULATION';$('finalGanttLegend').innerHTML='';
 $('results').innerHTML='<tr><td colspan="6" class="pending" style="text-align:center">Results will appear as processes complete.</td></tr>';$('averages').innerHTML='';
 $('explainKicker').textContent='SCHEDULER INSIGHT';$('explanation').textContent='Start the simulation to see a step-by-step explanation of arrivals, CPU allocation, preemption and completion.';
 $('status').className='status';$('statusText').textContent='READY TO RUN';$('startBtn').disabled=false;$('pauseBtn').disabled=true;
@@ -232,10 +249,23 @@ $('sliceLabel').textContent='SLICE '+index+' / '+plan.length;$('progress').style
 drawSegment(e,index-1);renderQueue();renderRemaining();renderResults();explain(e);
 if(index>=plan.length)finish();
 }
+
+function renderFinalGantt(){
+ const chart=$('finalGantt'),ruler=$('finalGanttRuler');
+ if(!executed.length){chart.innerHTML='<span class="empty-queue">No execution data yet.</span>';ruler.innerHTML='';$('finalGanttTotal').textContent='WAITING FOR SIMULATION';return;}
+ chart.innerHTML=executed.map(e=>{
+  const duration=e.end-e.start,pid=e.pid,label=pid<0?'IDLE':escapeHTML(processes[pid].id),bg=pid<0?'#526074':color(pid);
+  return '<div class="final-gantt-block'+(pid<0?' idle':'')+'" style="width:'+Math.max(78,duration*58)+'px;background:'+bg+'"><span>'+label+'</span><small>'+e.start+' → '+e.end+'</small><em>'+duration+' time unit'+(duration===1?'':'s')+'</em></div>';
+ }).join('');
+ ruler.innerHTML=executed.map(e=>'<span style="width:'+Math.max(78,(e.end-e.start)*58)+'px">'+e.start+'</span>').join('')+'<span>'+executed[executed.length-1].end+'</span>';
+ $('finalGanttTotal').textContent='TOTAL TIME: '+executed[executed.length-1].end+' UNITS';
+ $('finalGanttLegend').innerHTML=processes.map((p,i)=>'<span class="legend-item"><i style="background:'+color(i)+'"></i>'+escapeHTML(p.id)+'</span>').join('')+'<span class="legend-item"><i style="background:#526074"></i>Idle</span>';
+}
+
 function finish(){
 stop();finished=true;$('status').className='status done';$('statusText').textContent='ALL PROCESSES COMPLETE';$('cpuCore').classList.remove('active');$('cpuLabel').textContent='CYCLE END';$('cpuProcess').textContent='';$('cpuNote').textContent='Every process has completed. Review the final performance table below.';
 $('execTitle').textContent='Simulation completed';$('execDesc').textContent='All '+processes.length+' processes finished at time '+currentTime+'.';$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('explainKicker').textContent='SCHEDULING COMPLETE';$('explanation').innerHTML='The CPU has completed every process. Compare the <b>waiting time</b> and <b>turnaround time</b> in the results table. Try a different quantum to see how the execution order changes.';
-renderResults();
+renderResults();renderFinalGantt();
 }
 function play(){
 if(!running)return;
@@ -249,7 +279,7 @@ running=true;$('status').className='status running';$('statusText').textContent=
 }
 function resetViewForBuiltPlan(){
 index=0;finished=false;remaining={};completion={};currentTime=0;queueNow=[];lastPid=null;switches=0;executed=[];processes.forEach((p,i)=>remaining[i]=p.bt);
-$('clock').innerHTML='0<span class="unit"> t</span>';$('doneCount').textContent='0 / '+processes.length;$('switchCount').textContent='0';$('gantt').innerHTML='';$('ruler').innerHTML='';$('timelineInfo').textContent='0 time units';$('results').innerHTML='<tr><td colspan="6" class="pending" style="text-align:center">Results will appear as processes complete.</td></tr>';$('averages').innerHTML='';renderRemaining();renderQueue();
+$('clock').innerHTML='0<span class="unit"> t</span>';$('doneCount').textContent='0 / '+processes.length;$('switchCount').textContent='0';$('gantt').innerHTML='';$('ruler').innerHTML='';$('timelineInfo').textContent='0 time units';$('finalGantt').innerHTML='<span class="empty-queue">Run the simulation to generate the complete Gantt chart.</span>';$('finalGanttRuler').innerHTML='';$('finalGanttTotal').textContent='WAITING FOR SIMULATION';$('finalGanttLegend').innerHTML='';$('results').innerHTML='<tr><td colspan="6" class="pending" style="text-align:center">Results will appear as processes complete.</td></tr>';$('averages').innerHTML='';renderRemaining();renderQueue();
 }
 function pause(){stop();$('status').className='status';$('statusText').textContent='PAUSED';$('startBtn').disabled=false;$('pauseBtn').disabled=true}
 function step(){
